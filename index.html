@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Ultimate Pacman</title>
+
+<style>
+body{
+margin:0;
+background:black;
+color:white;
+font-family:sans-serif;
+text-align:center;
+}
+
+canvas{
+display:block;
+margin:auto;
+background:black;
+}
+</style>
+
+</head>
+
+<body>
+
+<canvas id="game" width="420" height="460"></canvas>
+
+<script>
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+const gridSize=20;
+
+let gameState="title";
+
+let score=0;
+let lives=3;
+let stage=1;
+
+let powerMode=false;
+let powerTimer=0;
+
+let speed=140;
+
+let highScore=
+localStorage.getItem("pacmanHighScore")||0;
+
+// 🍒
+let cherry=null;
+let cherryTimer=0;
+
+// 🔊 Audio
+const audioCtx=
+new(window.AudioContext||
+window.webkitAudioContext)();
+
+function playSound(freq,time){
+
+const osc=
+audioCtx.createOscillator();
+
+const gain=
+audioCtx.createGain();
+
+osc.frequency.value=freq;
+osc.type="square";
+
+osc.connect(gain);
+gain.connect(audioCtx.destination);
+
+osc.start();
+
+gain.gain.setValueAtTime(
+0.2,
+audioCtx.currentTime
+);
+
+gain.gain.exponentialRampToValueAtTime(
+0.001,
+audioCtx.currentTime+time
+);
+
+osc.stop(
+audioCtx.currentTime+time
+);
+
+}
+
+// 音
+function eatSound(){playSound(800,0.05);}
+function powerSound(){playSound(400,0.3);}
+function ghostSound(){playSound(200,0.15);}
+function deadSound(){playSound(100,0.5);}
+function stageSound(){playSound(600,0.4);}
+
+// 🎵 BGM
+function playBGM(){
+
+setInterval(()=>{
+
+playSound(300,0.05);
+
+setTimeout(()=>{
+playSound(500,0.05);
+},100);
+
+},600);
+
+}
+
+playBGM();
+
+// 😋 口
+let mouthAngle=0.2;
+let mouthDir=1;
+
+// 迷路
+const baseMap=[
+"#####################",
+"#.........#.........#",
+"#.###.###.#.###.###.#",
+"#o###.###.#.###.###o#",
+"#...................#",
+"#.###.#.#####.#.###.#",
+"#.....#...#...#.....#",
+"#####.### # ###.#####",
+"#.........P.........#",
+"#####################"
+];
+
+let foods=[];
+let map=[];
+
+let pacman={
+x:1,
+y:1,
+dx:0,
+dy:0
+};
+
+let ghosts=[];
+
+// 初期化
+function initGame(){
+
+score=0;
+lives=3;
+stage=1;
+speed=140;
+
+initStage();
+
+}
+
+function initStage(){
+
+map=[...baseMap];
+
+foods=[];
+
+ghosts=[
+{x:9,y:4,color:"red"},
+{x:10,y:4,color:"pink"},
+{x:11,y:4,color:"green"},
+{x:9,y:5,color:"orange"}
+];
+
+ghosts.forEach(g=>{
+g.dx=1;
+g.dy=0;
+});
+
+map.forEach((row,y)=>{
+
+[...row].forEach((c,x)=>{
+
+if(c==="."||c==="o"){
+
+foods.push({
+x,y,
+power:c==="o"
+});
+
+}
+
+if(c==="P"){
+pacman.x=x;
+pacman.y=y;
+}
+
+});
+
+});
+
+}
+
+function nextStage(){
+
+stage++;
+
+speed-=10;
+
+if(speed<60) speed=60;
+
+stageSound();
+
+initStage();
+
+clearInterval(loopId);
+loopId=setInterval(loop,speed);
+
+}
+
+// タイトル操作
+canvas.addEventListener(
+"touchstart",()=>{
+
+audioCtx.resume();
+
+if(gameState==="title"){
+
+initGame();
+gameState="play";
+
+}
+
+});
+
+// スワイプ
+let startX,startY;
+
+canvas.addEventListener(
+"touchstart",e=>{
+
+startX=e.touches[0].clientX;
+startY=e.touches[0].clientY;
+
+});
+
+canvas.addEventListener(
+"touchend",e=>{
+
+if(gameState!=="play")return;
+
+let dx=
+e.changedTouches[0].clientX-startX;
+
+let dy=
+e.changedTouches[0].clientY-startY;
+
+if(Math.abs(dx)>Math.abs(dy)){
+
+if(dx>0){
+pacman.dx=1;
+pacman.dy=0;
+}else{
+pacman.dx=-1;
+pacman.dy=0;
+}
+
+}else{
+
+if(dy>0){
+pacman.dx=0;
+pacman.dy=1;
+}else{
+pacman.dx=0;
+pacman.dy=-1;
+}
+
+}
+
+});
+
+function isWall(x,y){
+
+if(y<0||y>=map.length)
+return true;
+
+let row=map[y];
+
+if(x<0||x>=row.length)
+return true;
+
+return row[x]==="#";
+
+}
+
+function move(obj){
+
+let nx=obj.x+obj.dx;
+let ny=obj.y+obj.dy;
+
+if(!isWall(nx,ny)){
+obj.x=nx;
+obj.y=ny;
+}
+
+}
+
+function update(){
+
+if(gameState!=="play")return;
+
+move(pacman);
+
+// 😋 口
+mouthAngle+=0.05*mouthDir;
+
+if(
+mouthAngle>0.4||
+mouthAngle<0.1
+){
+mouthDir*=-1;
+}
+
+// 食べ物
+foods=foods.filter(f=>{
+
+if(
+f.x===pacman.x&&
+f.y===pacman.y
+){
+
+score+=10;
+
+eatSound();
+
+if(f.power){
+
+powerMode=true;
+powerTimer=60;
+
+powerSound();
+
+}
+
+return false;
+
+}
+
+return true;
+
+});
+
+// 🍒 チェリー管理
+cherryTimer++;
+
+if(cherryTimer>200){
+
+if(!cherry){
+
+cherry={
+x:10,
+y:5,
+time:100
+};
+
+}
+
+cherryTimer=0;
+
+}
+
+if(cherry){
+
+cherry.time--;
+
+if(cherry.time<=0){
+
+cherry=null;
+
+}
+
+if(
+pacman.x===cherry.x &&
+pacman.y===cherry.y
+){
+
+score+=100;
+
+eatSound();
+
+cherry=null;
+
+}
+
+}
+
+// 全部食べた
+if(foods.length===0){
+
+nextStage();
+return;
+
+}
+
+// パワー
+if(powerMode){
+
+powerTimer--;
+
+if(powerTimer<=0){
+powerMode=false;
+}
+
+}
+
+// 👻 ゴースト
+ghosts.forEach(g=>{
+
+if(Math.random()<0.3){
+
+let dx=pacman.x-g.x;
+let dy=pacman.y-g.y;
+
+let dirs=[];
+
+if(dx>0)dirs.push([1,0]);
+if(dx<0)dirs.push([-1,0]);
+if(dy>0)dirs.push([0,1]);
+if(dy<0)dirs.push([0,-1]);
+
+dirs.push(
+[1,0],
+[-1,0],
+[0,1],
+[0,-1]
+);
+
+let d=
+dirs[
+Math.floor(
+Math.random()*dirs.length
+)
+];
+
+if(!isWall(
+g.x+d[0],
+g.y+d[1]
+)){
+g.dx=d[0];
+g.dy=d[1];
+}
+
+}
+
+move(g);
+
+// 当たり
+if(
+g.x===pacman.x&&
+g.y===pacman.y
+){
+
+if(powerMode){
+
+score+=50;
+
+ghostSound();
+
+g.x=9;
+g.y=4;
+
+}else{
+
+lives--;
+
+deadSound();
+
+pacman.x=1;
+pacman.y=1;
+
+if(lives<=0){
+
+if(score>highScore){
+
+highScore=score;
+
+localStorage.setItem(
+"pacmanHighScore",
+highScore
+);
+
+}
+
+gameState="title";
+
+}
+
+}
+
+}
+
+});
+
+}
+
+function drawTitle(){
+
+ctx.fillStyle="yellow";
+ctx.font="30px sans-serif";
+
+ctx.fillText(
+"PACMAN",
+140,
+180
+);
+
+ctx.font="16px sans-serif";
+
+ctx.fillText(
+"Tap to Start",
+150,
+220
+);
+
+ctx.fillText(
+"High Score: "+highScore,
+130,
+260
+);
+
+}
+
+function drawGame(){
+
+ctx.clearRect(0,0,420,460);
+
+// 壁
+map.forEach((row,y)=>{
+
+[...row].forEach((c,x)=>{
+
+if(c==="#"){
+
+ctx.fillStyle="blue";
+
+ctx.fillRect(
+x*gridSize,
+y*gridSize,
+gridSize,
+gridSize
+);
+
+}
+
+});
+
+});
+
+// 食べ物
+foods.forEach(f=>{
+
+ctx.fillStyle=
+f.power?"cyan":"white";
+
+ctx.beginPath();
+
+ctx.arc(
+f.x*gridSize+10,
+f.y*gridSize+10,
+f.power?6:3,
+0,
+Math.PI*2
+);
+
+ctx.fill();
+
+});
+
+// 🍒 描画
+if(cherry){
+
+let px=
+cherry.x*gridSize+10;
+
+let py=
+cherry.y*gridSize+10;
+
+ctx.fillStyle="red";
+
+ctx.beginPath();
+
+ctx.arc(
+px,
+py,
+5,
+0,
+Math.PI*2
+);
+
+ctx.fill();
+
+ctx.strokeStyle="green";
+
+ctx.beginPath();
+
+ctx.moveTo(px,py-5);
+ctx.lineTo(px+3,py-8);
+ctx.stroke();
+
+}
+
+// 向き
+let directionAngle=0;
+
+if(pacman.dx===1)
+directionAngle=0;
+
+if(pacman.dx===-1)
+directionAngle=Math.PI;
+
+if(pacman.dy===1)
+directionAngle=Math.PI/2;
+
+if(pacman.dy===-1)
+directionAngle=-Math.PI/2;
+
+// 😋 パックマン
+ctx.fillStyle="yellow";
+
+ctx.beginPath();
+
+ctx.moveTo(
+pacman.x*gridSize+10,
+pacman.y*gridSize+10
+);
+
+ctx.arc(
+pacman.x*gridSize+10,
+pacman.y*gridSize+10,
+8,
+directionAngle+mouthAngle,
+directionAngle-mouthAngle,
+false
+);
+
+ctx.closePath();
+ctx.fill();
+
+// 👻 ゴースト（目付き）
+ghosts.forEach(g=>{
+
+let px=g.x*gridSize+10;
+let py=g.y*gridSize+10;
+
+ctx.fillStyle=
+powerMode?"blue":g.color;
+
+ctx.beginPath();
+
+ctx.arc(px,py,8,0,Math.PI*2);
+
+ctx.fill();
+
+// 白目
+ctx.fillStyle="white";
+
+ctx.beginPath();
+ctx.arc(px-3,py-2,3,0,Math.PI*2);
+ctx.arc(px+3,py-2,3,0,Math.PI*2);
+ctx.fill();
+
+// 瞳
+let eyeOffsetX=g.dx*1.5;
+let eyeOffsetY=g.dy*1.5;
+
+ctx.fillStyle="black";
+
+ctx.beginPath();
+
+ctx.arc(
+px-3+eyeOffsetX,
+py-2+eyeOffsetY,
+1.5,
+0,
+Math.PI*2
+);
+
+ctx.arc(
+px+3+eyeOffsetX,
+py-2+eyeOffsetY,
+1.5,
+0,
+Math.PI*2
+);
+
+ctx.fill();
+
+});
+
+// UI
+ctx.fillStyle="white";
+
+ctx.fillText(
+"Score: "+score,
+10,
+430
+);
+
+ctx.fillText(
+"Lives: "+lives,
+180,
+430
+);
+
+ctx.fillText(
+"Stage: "+stage,
+330,
+430
+);
+
+}
+
+function draw(){
+
+ctx.clearRect(0,0,420,460);
+
+if(gameState==="title"){
+
+drawTitle();
+
+}else{
+
+drawGame();
+
+}
+
+}
+
+function loop(){
+
+update();
+draw();
+
+}
+
+let loopId=setInterval(loop,speed);
+
+</script>
+
+</body>
+</html>
