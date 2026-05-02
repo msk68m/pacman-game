@@ -2,81 +2,91 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pacman Neo Ultimate</title>
+<title>Pacman Complete</title>
 
 <style>
 body{
 margin:0;
 overflow:hidden;
-font-family:-apple-system,BlinkMacSystemFont;
-background:radial-gradient(circle at 50% 30%, #111, #000);
+background:black;
+font-family:sans-serif;
 color:white;
 }
 
-canvas{display:block;}
-
-/* UI */
-#uiBox{
+/* タイトル */
+#title{
 position:absolute;
-top:15px;
-left:15px;
-background:rgba(0,0,0,0.5);
-padding:12px 18px;
-border-radius:15px;
-backdrop-filter:blur(10px);
-box-shadow:0 0 20px rgba(0,255,255,0.3);
+top:30%;
+width:100%;
+text-align:center;
+z-index:10;
+}
+#title h1{
+font-size:12vw;
+color:yellow;
+margin:0;
+}
+#title button{
+font-size:6vw;
+padding:10px 20px;
+margin-top:20px;
 }
 
-#score{font-size:20px;}
-#life{font-size:22px;margin-top:5px;}
-
-/* タイトル */
-<div id="title">
-<h1 style="font-size:12vw;">PACMAN</h1>
-<button id="startBtn" style="font-size:6vw;">Game Start</button>
-</div>
+/* UI */
+#ui{
+position:absolute;
+top:10px;
+left:10px;
+z-index:10;
+font-size:18px;
+}
 
 /* コントローラー */
 #pad{
 position:fixed;
-bottom:40px;
+bottom:30px;
 left:50%;
 transform:translateX(-50%);
-width:280px;
-height:280px;
+width:240px;
+height:240px;
+z-index:10;
 }
-
 .btn{
 position:absolute;
-width:90px;
-height:90px;
-border-radius:25px;
-background:linear-gradient(145deg,#222,#111);
-box-shadow:0 0 15px #0ff,inset 0 0 10px #0ff3;
+width:80px;
+height:80px;
+background:#333;
+border-radius:15px;
 display:flex;
-align-items:center;
 justify-content:center;
-font-size:36px;
+align-items:center;
+font-size:30px;
 }
-.btn:active{transform:scale(0.9);}
+.up{top:0;left:80px;}
+.down{bottom:0;left:80px;}
+.left{left:0;top:80px;}
+.right{right:0;top:80px;}
 
-.up{top:0;left:95px;}
-.down{bottom:0;left:95px;}
-.left{left:0;top:95px;}
-.right{right:0;top:95px;}
+canvas{
+position:absolute;
+top:0;
+left:0;
+}
 </style>
 </head>
 
 <body>
 
-<div id="uiBox">
-<div id="score"></div>
-<div id="life"></div>
-</div>
-
 <div id="title">
 <h1>PACMAN</h1>
-<p>Tap to Start</p>
+<button id="startBtn">Game Start</button>
+</div>
+
+<div id="ui">
+<div id="score"></div>
+<div id="life"></div>
+<div id="hi"></div>
+<button id="reset">リセット</button>
 </div>
 
 <canvas id="game"></canvas>
@@ -96,44 +106,23 @@ const ctx=canvas.getContext("2d");
 canvas.width=innerWidth;
 canvas.height=innerHeight;
 
-let grid = Math.min(
-  Math.floor(canvas.width / 21),
-  Math.floor(canvas.height / map.length)
-);
+// ===== BGM =====
+const bgm=new Audio("bgm.mp3");
+bgm.loop=true;
 
-// 音
-const audio=new (window.AudioContext||window.webkitAudioContext)();
-function play(f){
-let o=audio.createOscillator();
-o.frequency.value=f;
-o.connect(audio.destination);
-o.start();
-setTimeout(()=>o.stop(),80);
-}
-
-// BGM
-let bgm;
-function startBGM(){
-bgm=setInterval(()=>{
-play(300);
-setTimeout(()=>play(500),100);
-setTimeout(()=>play(700),200);
-},600);
-}
-function stopBGM(){clearInterval(bgm);}
-
-// 状態
+// ===== 状態 =====
 let state="title";
-let stage=0;
 let score=0;
+let hi=localStorage.getItem("hi")||0;
 let life=5;
+let stage=0;
 
-let pac={x:1,y:1,dx:0,dy:0,dir:0,anim:0};
-let ghosts=[];
+let pac={x:1,y:1,dx:0,dy:0};
 let foods=[];
+let ghosts=[];
 let map=[];
 
-// ===== 5ステージ（全部21幅）=====
+// ===== 5ステージ =====
 const stages=[
 
 [
@@ -203,14 +192,11 @@ const stages=[
 
 ];
 
-// 初期化
+// ===== 初期化 =====
 function init(){
 map=[...stages[stage]];
 foods=[];
-ghosts=[
-{x:10,y:3,dx:1,dy:0},
-{x:9,y:3,dx:-1,dy:0}
-];
+ghosts=[{x:10,y:3}];
 
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
@@ -220,12 +206,12 @@ if(c==="P"){pac.x=x;pac.y=y;}
 });
 }
 
-// 壁
+// ===== 壁 =====
 function wall(x,y){
 return map[y][x]==="#";
 }
 
-// 移動
+// ===== 移動 =====
 function move(o){
 let nx=o.x+o.dx;
 let ny=o.y+o.dy;
@@ -234,28 +220,22 @@ if(nx<0) nx=20;
 if(nx>20) nx=0;
 
 if(!wall(nx,ny)){
-o.x=nx;o.y=ny;
+o.x=nx;
+o.y=ny;
 }
 }
 
-// 更新
+// ===== 更新 =====
 function update(){
 
 if(state!=="play") return;
 
 move(pac);
 
-// 向き
-if(pac.dx===1) pac.dir=0;
-if(pac.dx===-1) pac.dir=Math.PI;
-if(pac.dy===1) pac.dir=Math.PI/2;
-if(pac.dy===-1) pac.dir=-Math.PI/2;
-
-// エサ
+// 食べる
 foods=foods.filter(f=>{
 if(f.x===pac.x&&f.y===pac.y){
 score+=10;
-play(700);
 return false;
 }
 return true;
@@ -263,21 +243,22 @@ return true;
 
 // ゴースト
 ghosts.forEach(g=>{
-g.dx=Math.sign(pac.x-g.x);
-g.dy=Math.sign(pac.y-g.y);
-
-move(g);
+g.x+=Math.sign(pac.x-g.x);
+g.y+=Math.sign(pac.y-g.y);
 
 if(g.x===pac.x&&g.y===pac.y){
 life--;
-play(200);
 
 if(life<=0){
+if(score>hi){
+hi=score;
+localStorage.setItem("hi",hi);
+}
 state="title";
 life=5;
 score=0;
 stage=0;
-stopBGM();
+bgm.pause();
 document.getElementById("title").style.display="block";
 }else{
 pac.x=1;pac.y=1;
@@ -285,39 +266,41 @@ pac.x=1;pac.y=1;
 }
 });
 
-// クリア → 次ステージ
+// クリア
 if(foods.length===0){
-play(1000);
 stage=(stage+1)%5;
 init();
 }
 
 }
 
-// 描画
+// ===== 描画 =====
 function draw(){
 
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
 if(state==="title") return;
 
+// ⭐ サイズ自動調整（重要）
+let grid=Math.min(
+Math.floor(canvas.width/21),
+Math.floor(canvas.height/map.length)
+);
+
 let ox=(canvas.width-21*grid)/2;
 let oy=(canvas.height-map.length*grid)/2;
 
-// 壁（ネオン）
+// 壁
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
 if(c==="#"){
-ctx.fillStyle="#0ff";
-ctx.shadowColor="#0ff";
-ctx.shadowBlur=10;
+ctx.fillStyle="blue";
 ctx.fillRect(ox+x*grid,oy+y*grid,grid,grid);
 }
 });
 });
 
 // エサ
-ctx.shadowBlur=0;
 foods.forEach(f=>{
 ctx.fillStyle="white";
 ctx.beginPath();
@@ -326,67 +309,43 @@ ctx.fill();
 });
 
 // パックマン
-pac.anim+=0.2;
-let m=Math.abs(Math.sin(pac.anim))*0.5;
-
-ctx.shadowColor="yellow";
-ctx.shadowBlur=20;
-
 ctx.fillStyle="yellow";
 ctx.beginPath();
-ctx.moveTo(ox+pac.x*grid+grid/2,oy+pac.y*grid+grid/2);
-ctx.arc(
-ox+pac.x*grid+grid/2,
-oy+pac.y*grid+grid/2,
-grid*0.45,
-pac.dir+m,
-pac.dir+Math.PI*2-m
-);
+ctx.arc(ox+pac.x*grid+grid/2,oy+pac.y*grid+grid/2,grid*0.4,0,Math.PI*2);
 ctx.fill();
-
-ctx.shadowBlur=0;
-
-// ゴースト
-ghosts.forEach(g=>{
-ctx.fillStyle="red";
-ctx.shadowColor="red";
-ctx.shadowBlur=15;
-ctx.beginPath();
-ctx.arc(ox+g.x*grid+grid/2,oy+g.y*grid+grid/2,grid*0.45,0,Math.PI*2);
-ctx.fill();
-ctx.shadowBlur=0;
-});
 
 // UI
-document.getElementById("score").innerText=
-"Score: "+score+"  Stage: "+(stage+1);
-
+document.getElementById("score").innerText="Score:"+score+" Stage:"+(stage+1);
 document.getElementById("life").innerText="❤️".repeat(life);
+document.getElementById("hi").innerText="HI:"+hi;
 
 }
 
-// ループ
+// ===== ループ =====
 setInterval(()=>{
 update();
 draw();
 },180);
 
-// スタート
-canvas.addEventListener("touchstart",()=>{
-if(state==="title"){
-play(900);
-init();
-state="play";
-startBGM();
-document.getElementById("title").style.display="none";
-}
-});
-
-// 操作
+// ===== 操作 =====
 document.querySelector(".up").onclick=()=>{pac.dx=0;pac.dy=-1;}
 document.querySelector(".down").onclick=()=>{pac.dx=0;pac.dy=1;}
 document.querySelector(".left").onclick=()=>{pac.dx=-1;pac.dy=0;}
 document.querySelector(".right").onclick=()=>{pac.dx=1;pac.dy=0;}
+
+// ===== スタート =====
+document.getElementById("startBtn").onclick=()=>{
+init();
+state="play";
+bgm.play();
+document.getElementById("title").style.display="none";
+};
+
+// ===== リセット =====
+document.getElementById("reset").onclick=()=>{
+localStorage.removeItem("hi");
+hi=0;
+};
 
 </script>
 </body>
