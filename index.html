@@ -2,58 +2,28 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pacman Ultimate</title>
+<title>Pacman Final Stable</title>
 
 <style>
-body{
-margin:0;
-background:black;
-overflow:hidden;
-font-family:sans-serif;
-color:white;
-}
+body{margin:0;background:black;overflow:hidden;color:white;font-family:sans-serif;}
+canvas{display:block;}
 
-/* 背景（少しオシャレ） */
-body::before{
-content:"";
-position:fixed;
-width:100%;
-height:100%;
-background:
-radial-gradient(circle at 20% 30%,#222 0%,transparent 40%),
-radial-gradient(circle at 80% 70%,#111 0%,transparent 40%);
-z-index:-1;
-}
-
-/* キャンバス */
-canvas{
-display:block;
-}
-
-/* 🎮 コントローラー */
+/* コントローラー */
 #pad{
 position:fixed;
 bottom:30px;
 left:50%;
 transform:translateX(-50%);
-width:260px;
-height:260px;
+width:260px;height:260px;
 display:none;
 }
-
 .btn{
-position:absolute;
-width:80px;
-height:80px;
+position:absolute;width:80px;height:80px;
 border-radius:20px;
 background:rgba(255,255,255,0.15);
-border:2px solid rgba(255,255,255,0.3);
-display:flex;
-align-items:center;
-justify-content:center;
+display:flex;align-items:center;justify-content:center;
 font-size:30px;
 }
-
 .up{top:0;left:90px;}
 .down{bottom:0;left:90px;}
 .left{left:0;top:90px;}
@@ -74,28 +44,35 @@ font-size:30px;
 
 <script>
 
+// ===== 基本 =====
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 
-canvas.width=window.innerWidth;
-canvas.height=window.innerHeight;
+canvas.width=innerWidth;
+canvas.height=innerHeight;
 
 let grid=Math.floor(canvas.width/21);
 
 // ===== 状態 =====
 let state="title";
 let score=0;
-let stage=0;
 let life=5;
+let stage=0;
 
 let pac={x:1,y:1,dx:0,dy:0,dir:0};
+let nextDir={dx:0,dy:0};
+
 let ghosts=[];
 let foods=[];
+let powers=[];
 let map=[];
 
+let powerMode=false;
+let powerTimer=0;
+
+// ===== 5面（絶対維持）=====
 const stages=[
 
-// 5面（全部同サイズ）
 [
 "#####################",
 "#.........#.........#",
@@ -186,27 +163,33 @@ const stages=[
 
 // ===== 初期化 =====
 function init(){
+
 map=[...stages[stage]];
 foods=[];
+powers=[];
 ghosts=[
-{x:10,y:8,c:"red"},
-{x:9,y:8,c:"pink"},
-{x:11,y:8,c:"cyan"},
-{x:10,y:7,c:"orange"}
+{x:10,y:8},{x:9,y:8},{x:11,y:8}
 ];
 
+// エサ生成
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
 if(c==="."||c==="o") foods.push({x,y});
 if(c==="P"){pac.x=x;pac.y=y;}
 });
 });
+
+// ⭐ パワーエサ3つ
+for(let i=0;i<3;i++){
+let f=foods[Math.floor(Math.random()*foods.length)];
+powers.push({x:f.x,y:f.y});
+}
+
 }
 
 // ===== 入力 =====
 function setDir(dx,dy){
-pac.dx=dx;
-pac.dy=dy;
+nextDir={dx,dy};
 
 if(dx===1) pac.dir=0;
 if(dx===-1) pac.dir=Math.PI;
@@ -231,9 +214,16 @@ function update(){
 
 if(state!=="play") return;
 
+// ⭐ 先行入力
+let tx=pac.x+nextDir.dx;
+let ty=pac.y+nextDir.dy;
+if(!wall(tx,ty)){
+pac.dx=nextDir.dx;
+pac.dy=nextDir.dy;
+}
+
 let nx=pac.x+pac.dx;
 let ny=pac.y+pac.dy;
-
 if(!wall(nx,ny)){
 pac.x=nx;
 pac.y=ny;
@@ -248,25 +238,40 @@ return false;
 return true;
 });
 
-// ゴースト
-ghosts.forEach(g=>{
-let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-let d=dirs[Math.floor(Math.random()*4)];
-if(!wall(g.x+d[0],g.y+d[1])){
-g.x+=d[0];
-g.y+=d[1];
+// ⭐ パワー
+powers=powers.filter(p=>{
+if(p.x===pac.x&&p.y===pac.y){
+powerMode=true;
+powerTimer=300;
+score+=50;
+return false;
+}
+return true;
+});
+
+if(powerMode){
+powerTimer--;
+if(powerTimer<=0) powerMode=false;
 }
 
-// 衝突
-if(g.x===pac.x&&g.y===pac.y){
-life--;
-pac.x=1; pac.y=1;
+// ゴースト
+ghosts.forEach(g=>{
 
-if(life<=0){
-state="title";
-life=5;
-score=0;
-stage=0;
+if(powerMode){
+g.x+=Math.sign(g.x-pac.x);
+g.y+=Math.sign(g.y-pac.y);
+}else{
+g.x+=Math.sign(pac.x-g.x);
+g.y+=Math.sign(pac.y-g.y);
+}
+
+if(g.x===pac.x&&g.y===pac.y){
+if(powerMode){
+score+=200;
+g.x=10;g.y=8;
+}else{
+life--;
+pac.x=1;pac.y=1;
 }
 }
 });
@@ -276,6 +281,7 @@ if(foods.length===0){
 stage=(stage+1)%5;
 init();
 }
+
 }
 
 // ===== 描画 =====
@@ -287,16 +293,15 @@ if(state==="title"){
 ctx.fillStyle="yellow";
 ctx.font="bold 80px sans-serif";
 ctx.fillText("PACMAN",canvas.width*0.1,200);
-
 ctx.font="40px sans-serif";
-ctx.fillText("Game Start",canvas.width*0.25,300);
+ctx.fillText("Tap to Start",canvas.width*0.2,300);
 return;
 }
 
 let ox=(canvas.width-map[0].length*grid)/2;
 let oy=(canvas.height-map.length*grid)/2;
 
-// 壁（レンガ風）
+// 壁（レンガ）
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
 if(c==="#"){
@@ -311,6 +316,14 @@ foods.forEach(f=>{
 ctx.fillStyle="white";
 ctx.beginPath();
 ctx.arc(ox+f.x*grid+grid/2,oy+f.y*grid+grid/2,grid/6,0,Math.PI*2);
+ctx.fill();
+});
+
+// ⭐ パワーエサ
+powers.forEach(p=>{
+ctx.fillStyle="cyan";
+ctx.beginPath();
+ctx.arc(ox+p.x*grid+grid/2,oy+p.y*grid+grid/2,grid/3,0,Math.PI*2);
 ctx.fill();
 });
 
@@ -329,21 +342,22 @@ ctx.fill();
 
 // ゴースト
 ghosts.forEach(g=>{
-ctx.fillStyle=g.c;
+ctx.fillStyle=powerMode?"blue":"red";
 ctx.beginPath();
 ctx.arc(ox+g.x*grid+grid/2,oy+g.y*grid+grid/2,grid/2,0,Math.PI*2);
 ctx.fill();
 });
 
-// UI
-ctx.font="bold 24px sans-serif";
-ctx.fillText("Score: "+score,20,40);
-ctx.fillText("Stage: "+(stage+1),20,70);
+// ⭐ スコア強化
+ctx.font="bold 32px sans-serif";
+ctx.fillText("Score: "+score,20,50);
+ctx.fillText("Stage: "+(stage+1),20,90);
 
 // ❤️
 for(let i=0;i<life;i++){
-ctx.fillText("❤️",20+i*30,100);
+ctx.fillText("❤️",20+i*35,130);
 }
+
 }
 
 // ===== ループ =====
