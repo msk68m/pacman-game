@@ -6,16 +6,16 @@
 
 <style>
 body {
-    margin:0;
-    background:black;
-    color:white;
-    font-family:sans-serif;
+margin:0;
+background:black;
+color:white;
+font-family:sans-serif;
 }
 
 canvas {
-    display:block;
-    margin:auto;
-    background:black;
+display:block;
+margin:auto;
+background:black;
 }
 </style>
 </head>
@@ -33,15 +33,62 @@ const gridSize = 20;
 
 let score = 0;
 let lives = 3;
+let stage = 1;
+
 let powerMode = false;
 let powerTimer = 0;
 
-// 口アニメーション
-let mouthAngle = 0.2;
-let mouthDir = 1;
+let speed = 140;
+
+// 🔊 音
+const audioCtx =
+new (window.AudioContext ||
+window.webkitAudioContext)();
+
+function playSound(freq,time){
+
+const osc =
+audioCtx.createOscillator();
+
+const gain =
+audioCtx.createGain();
+
+osc.frequency.value=freq;
+osc.type="square";
+
+osc.connect(gain);
+gain.connect(audioCtx.destination);
+
+osc.start();
+
+gain.gain.setValueAtTime(
+0.2,
+audioCtx.currentTime
+);
+
+gain.gain.exponentialRampToValueAtTime(
+0.001,
+audioCtx.currentTime+time
+);
+
+osc.stop(
+audioCtx.currentTime+time
+);
+
+}
+
+function eatSound(){ playSound(800,0.05); }
+function powerSound(){ playSound(400,0.3); }
+function ghostSound(){ playSound(200,0.15); }
+function deadSound(){ playSound(100,0.5); }
+function stageSound(){ playSound(600,0.4); }
+
+// 口
+let mouthAngle=0.2;
+let mouthDir=1;
 
 // 迷路
-const map = [
+const baseMap = [
 "#####################",
 "#.........#.........#",
 "#.###.###.#.###.###.#",
@@ -54,17 +101,25 @@ const map = [
 "#####################"
 ];
 
-let foods = [];
+let foods=[];
+let map=[];
 
-let pacman = {
+let pacman={
 x:1,
 y:1,
 dx:0,
 dy:0
 };
 
-// 👻 4体ゴースト
-let ghosts = [
+let ghosts=[];
+
+function initStage(){
+
+map=[...baseMap];
+
+foods=[];
+
+ghosts=[
 {x:9,y:4,color:"red"},
 {x:10,y:4,color:"pink"},
 {x:11,y:4,color:"green"},
@@ -76,12 +131,11 @@ g.dx=1;
 g.dy=0;
 });
 
-// 初期化
 map.forEach((row,y)=>{
 
 [...row].forEach((c,x)=>{
 
-if(c==="." || c==="o"){
+if(c==="."||c==="o"){
 
 foods.push({
 x,y,
@@ -99,28 +153,49 @@ pacman.y=y;
 
 });
 
-// スワイプ操作
+}
+
+// スワイプ
 let startX,startY;
 
-document.addEventListener("touchstart",e=>{
+document.addEventListener(
+"touchstart",e=>{
+
 startX=e.touches[0].clientX;
 startY=e.touches[0].clientY;
+
+audioCtx.resume();
+
 });
 
-document.addEventListener("touchend",e=>{
+document.addEventListener(
+"touchend",e=>{
 
-let dx=e.changedTouches[0].clientX-startX;
-let dy=e.changedTouches[0].clientY-startY;
+let dx=
+e.changedTouches[0].clientX-startX;
+
+let dy=
+e.changedTouches[0].clientY-startY;
 
 if(Math.abs(dx)>Math.abs(dy)){
 
-if(dx>0){pacman.dx=1;pacman.dy=0;}
-else{pacman.dx=-1;pacman.dy=0;}
+if(dx>0){
+pacman.dx=1;
+pacman.dy=0;
+}else{
+pacman.dx=-1;
+pacman.dy=0;
+}
 
 }else{
 
-if(dy>0){pacman.dx=0;pacman.dy=1;}
-else{pacman.dx=0;pacman.dy=-1;}
+if(dy>0){
+pacman.dx=0;
+pacman.dy=1;
+}else{
+pacman.dx=0;
+pacman.dy=-1;
+}
 
 }
 
@@ -128,11 +203,13 @@ else{pacman.dx=0;pacman.dy=-1;}
 
 function isWall(x,y){
 
-if(y<0||y>=map.length) return true;
+if(y<0||y>=map.length)
+return true;
 
 let row=map[y];
 
-if(x<0||x>=row.length) return true;
+if(x<0||x>=row.length)
+return true;
 
 return row[x]==="#";
 
@@ -150,27 +227,56 @@ obj.y=ny;
 
 }
 
+function nextStage(){
+
+stage++;
+
+speed-=10;
+
+if(speed<60) speed=60;
+
+stageSound();
+
+initStage();
+
+clearInterval(loopId);
+loopId=setInterval(loop,speed);
+
+}
+
 function update(){
 
 move(pacman);
 
-// 口アニメ
-mouthAngle += 0.05 * mouthDir;
+// 口
+mouthAngle+=0.05*mouthDir;
 
-if(mouthAngle > 0.4 || mouthAngle < 0.1){
-mouthDir *= -1;
+if(
+mouthAngle>0.4||
+mouthAngle<0.1
+){
+mouthDir*=-1;
 }
 
 // 食べ物
-foods = foods.filter(f=>{
+foods=foods.filter(f=>{
 
-if(f.x===pacman.x && f.y===pacman.y){
+if(
+f.x===pacman.x&&
+f.y===pacman.y
+){
 
 score+=10;
 
+eatSound();
+
 if(f.power){
+
 powerMode=true;
 powerTimer=60;
+
+powerSound();
+
 }
 
 return false;
@@ -181,7 +287,16 @@ return true;
 
 });
 
-// パワー時間
+// 🏁 全部食べたら
+if(foods.length===0){
+
+nextStage();
+
+return;
+
+}
+
+// パワー
 if(powerMode){
 
 powerTimer--;
@@ -192,23 +307,21 @@ powerMode=false;
 
 }
 
-// 👻 ゴーストAI
+// 👻 ゴースト
 ghosts.forEach(g=>{
 
-// 少し追尾するAI
 if(Math.random()<0.3){
 
-let dx = pacman.x - g.x;
-let dy = pacman.y - g.y;
+let dx=pacman.x-g.x;
+let dy=pacman.y-g.y;
 
-let dirs = [];
+let dirs=[];
 
-if(dx>0) dirs.push([1,0]);
-if(dx<0) dirs.push([-1,0]);
-if(dy>0) dirs.push([0,1]);
-if(dy<0) dirs.push([0,-1]);
+if(dx>0)dirs.push([1,0]);
+if(dx<0)dirs.push([-1,0]);
+if(dy>0)dirs.push([0,1]);
+if(dy<0)dirs.push([0,-1]);
 
-// ランダムも混ぜる
 dirs.push(
 [1,0],
 [-1,0],
@@ -216,11 +329,17 @@ dirs.push(
 [0,-1]
 );
 
-let d = dirs[
-Math.floor(Math.random()*dirs.length)
+let d=
+dirs[
+Math.floor(
+Math.random()*dirs.length
+)
 ];
 
-if(!isWall(g.x+d[0],g.y+d[1])){
+if(!isWall(
+g.x+d[0],
+g.y+d[1]
+)){
 g.dx=d[0];
 g.dy=d[1];
 }
@@ -229,20 +348,26 @@ g.dy=d[1];
 
 move(g);
 
-// 当たり判定
-if(g.x===pacman.x && g.y===pacman.y){
+// 当たり
+if(
+g.x===pacman.x&&
+g.y===pacman.y
+){
 
 if(powerMode){
 
 score+=50;
 
-// リスポーン
+ghostSound();
+
 g.x=9;
 g.y=4;
 
 }else{
 
 lives--;
+
+deadSound();
 
 pacman.x=1;
 pacman.y=1;
@@ -311,8 +436,8 @@ ctx.fill();
 
 });
 
-// 向き判定
-let directionAngle = 0;
+// 向き
+let directionAngle=0;
 
 if(pacman.dx===1)
 directionAngle=0;
@@ -340,15 +465,15 @@ ctx.arc(
 pacman.x*gridSize+10,
 pacman.y*gridSize+10,
 8,
-directionAngle + mouthAngle,
-directionAngle - mouthAngle,
+directionAngle+mouthAngle,
+directionAngle-mouthAngle,
 false
 );
 
 ctx.closePath();
 ctx.fill();
 
-// 👻 ゴースト描画
+// 👻
 ghosts.forEach(g=>{
 
 ctx.fillStyle=
@@ -379,7 +504,13 @@ ctx.fillText(
 
 ctx.fillText(
 "Lives: "+lives,
-300,
+180,
+430
+);
+
+ctx.fillText(
+"Stage: "+stage,
+330,
 430
 );
 
@@ -392,7 +523,11 @@ draw();
 
 }
 
-setInterval(loop,140);
+let loopId;
+
+initStage();
+
+loopId=setInterval(loop,speed);
 
 </script>
 
