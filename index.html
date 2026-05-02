@@ -2,58 +2,88 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pacman Ultimate</title>
+<title>Pacman Pro</title>
+
 <style>
-body{margin:0;background:black;overflow:hidden;color:white;font-family:sans-serif;}
-canvas{display:block;}
+body{
+margin:0;
+background:black;
+overflow:hidden;
+font-family:sans-serif;
+color:white;
+}
+
+canvas{
+display:block;
+}
+
+/* 🎮 コントローラー */
+#pad{
+position:fixed;
+bottom:20px;
+left:50%;
+transform:translateX(-50%);
+width:200px;
+height:200px;
+}
+
+.btn{
+position:absolute;
+width:60px;
+height:60px;
+border-radius:50%;
+background:rgba(255,255,255,0.1);
+backdrop-filter:blur(5px);
+border:2px solid rgba(255,255,255,0.3);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:24px;
+color:white;
+}
+
+.up{top:0;left:70px;}
+.down{bottom:0;left:70px;}
+.left{left:0;top:70px;}
+.right{right:0;top:70px;}
 </style>
+
 </head>
+
 <body>
+
 <canvas id="game"></canvas>
+
+<!-- 🎮 コントローラー -->
+<div id="pad">
+<div class="btn up">▲</div>
+<div class="btn down">▼</div>
+<div class="btn left">◀</div>
+<div class="btn right">▶</div>
+</div>
 
 <script>
 
-// ===== 基本設定 =====
+// ===== 画面 =====
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let grid = Math.floor(canvas.width / 21);
-
-// ===== 音 =====
-const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-
-function beep(f,t){
-let o=audioCtx.createOscillator();
-let g=audioCtx.createGain();
-o.frequency.value=f;
-o.connect(g); g.connect(audioCtx.destination);
-o.start();
-g.gain.setValueAtTime(0.2,audioCtx.currentTime);
-g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+t);
-o.stop(audioCtx.currentTime+t);
-}
+let grid = Math.floor(canvas.width/21);
 
 // ===== 状態 =====
 let state="title";
 let score=0;
-let high=localStorage.getItem("pacHigh")||0;
-let life=3;
 let stage=1;
+let life=3;
 let speed=140;
-
-let power=false;
-let powerT=0;
-
-let mouth=0.2,mdir=1;
 
 let pac={x:1,y:1,dx:0,dy:0};
 let ghosts=[];
 let foods=[];
-let cherry=null;
-let cherryT=0;
+let map=[];
 
 // ===== マップ =====
 const base=[
@@ -78,8 +108,6 @@ const base=[
 "#####################"
 ];
 
-let map=[];
-
 // ===== 初期化 =====
 function init(){
 
@@ -93,8 +121,6 @@ ghosts=[
 {x:10,y:7,c:"orange"}
 ];
 
-ghosts.forEach(g=>{g.dx=1;g.dy=0;});
-
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
 if(c==="."||c==="o") foods.push({x,y,p:c==="o"});
@@ -103,129 +129,111 @@ if(c==="P"){pac.x=x;pac.y=y;}
 });
 }
 
-// ===== 操作 =====
-let sx,sy;
+// ===== コントローラー =====
+document.querySelector(".up").onclick=()=>{pac.dx=0;pac.dy=-1;}
+document.querySelector(".down").onclick=()=>{pac.dx=0;pac.dy=1;}
+document.querySelector(".left").onclick=()=>{pac.dx=-1;pac.dy=0;}
+document.querySelector(".right").onclick=()=>{pac.dx=1;pac.dy=0;}
 
-canvas.addEventListener("touchstart",e=>{
-audioCtx.resume();
-if(state==="title") start();
-sx=e.touches[0].clientX;
-sy=e.touches[0].clientY;
-});
-
-canvas.addEventListener("touchend",e=>{
-if(state!=="play")return;
-
-let dx=e.changedTouches[0].clientX-sx;
-let dy=e.changedTouches[0].clientY-sy;
-
-if(Math.abs(dx)>Math.abs(dy)){
-pac.dx=dx>0?1:-1; pac.dy=0;
-}else{
-pac.dy=dy>0?1:-1; pac.dx=0;
-}
-});
-
-// ===== 開始 =====
-function start(){
-score=0; life=3; stage=1; speed=140;
-init();
-state="play";
-}
-
-// ===== 判定 =====
+// ===== 壁 =====
 function wall(x,y){
 if(y<0||y>=map.length)return true;
 if(x<0||x>=map[0].length)return true;
 return map[y][x]==="#";
 }
 
+// ===== 移動 =====
 function move(o){
-let nx=o.x+o.dx, ny=o.y+o.dy;
-if(!wall(nx,ny)){o.x=nx;o.y=ny;}
+
+let nx=o.x+o.dx;
+let ny=o.y+o.dy;
+
+// ワープ
+if(nx<0) nx=map[0].length-1;
+if(nx>=map[0].length) nx=0;
+
+if(!wall(nx,ny)){
+o.x=nx;
+o.y=ny;
+}
+}
+
+// ===== AI =====
+function getTarget(g){
+
+if(g.c==="red") return {x:pac.x,y:pac.y};
+
+if(g.c==="pink"){
+return {x:pac.x+pac.dx*4,y:pac.y+pac.dy*4};
+}
+
+if(g.c==="cyan"){
+return {x:pac.x+(Math.random()*6-3),y:pac.y+(Math.random()*6-3)};
+}
+
+let dist=Math.abs(pac.x-g.x)+Math.abs(pac.y-g.y);
+
+if(dist<5){
+return {x:1,y:1};
+}else{
+return {x:pac.x,y:pac.y};
+}
 }
 
 // ===== 更新 =====
 function update(){
 
-if(state!=="play")return;
+if(state==="title") return;
 
 move(pac);
-
-// 口
-mouth+=0.05*mdir;
-if(mouth>0.4||mouth<0.1)mdir*=-1;
 
 // 食べ物
 foods=foods.filter(f=>{
 if(f.x===pac.x&&f.y===pac.y){
-score+=10; beep(800,0.05);
-if(f.p){power=true;powerT=80; beep(400,0.2);}
+score+=10;
 return false;
 }
 return true;
 });
 
-// 🍒
-cherryT++;
-if(cherryT>200){
-if(!cherry) cherry={x:10,y:9,time:120};
-cherryT=0;
-}
-if(cherry){
-cherry.time--;
-if(cherry.time<=0) cherry=null;
-if(pac.x===cherry.x&&pac.y===cherry.y){
-score+=100; beep(900,0.1); cherry=null;
-}
-}
-
-// パワー
-if(power){
-powerT--;
-if(powerT<=0) power=false;
-}
-
 // 👻
 ghosts.forEach(g=>{
 
-if(Math.random()<0.3){
-let dx=pac.x-g.x;
-let dy=pac.y-g.y;
+let target=getTarget(g);
 
 let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-dirs.sort(()=>Math.random()-0.5);
-
-if(Math.abs(dx)>Math.abs(dy)){
-dirs.unshift([dx>0?1:-1,0]);
-}else{
-dirs.unshift([0,dy>0?1:-1]);
-}
+let best=null;
+let bestD=9999;
 
 for(let d of dirs){
-if(!wall(g.x+d[0],g.y+d[1])){
-g.dx=d[0]; g.dy=d[1]; break;
+
+let nx=g.x+d[0];
+let ny=g.y+d[1];
+
+if(wall(nx,ny)) continue;
+
+let dist=Math.abs(target.x-nx)+Math.abs(target.y-ny);
+
+if(dist<bestD){
+bestD=dist;
+best=d;
 }
 }
+
+if(best){
+g.dx=best[0];
+g.dy=best[1];
 }
 
 move(g);
 
 // 衝突
 if(g.x===pac.x&&g.y===pac.y){
-if(power){
-score+=50; beep(200,0.1);
-g.x=10; g.y=8;
-}else{
-life--; beep(100,0.4);
+life--;
 pac.x=1; pac.y=1;
+
 if(life<=0){
-if(score>high){
-high=score;
-localStorage.setItem("pacHigh",score);
-}
 state="title";
-}
 }
 }
 
@@ -235,8 +243,6 @@ state="title";
 if(foods.length===0){
 stage++;
 if(stage>10) stage=1;
-speed-=10;
-if(speed<60)speed=60;
 init();
 }
 
@@ -251,9 +257,7 @@ if(state==="title"){
 ctx.fillStyle="yellow";
 ctx.font="40px sans-serif";
 ctx.fillText("PACMAN",canvas.width/2-90,200);
-ctx.fillStyle="white";
 ctx.fillText("Tap to Start",canvas.width/2-110,260);
-ctx.fillText("High:"+high,canvas.width/2-90,320);
 return;
 }
 
@@ -272,44 +276,23 @@ ctx.fillRect(ox+x*grid,oy+y*grid,grid,grid);
 
 // 食べ物
 foods.forEach(f=>{
-ctx.fillStyle=f.p?"cyan":"white";
+ctx.fillStyle="white";
 ctx.beginPath();
-ctx.arc(ox+f.x*grid+10,oy+f.y*grid+10,f.p?6:3,0,Math.PI*2);
+ctx.arc(ox+f.x*grid+10,oy+f.y*grid+10,3,0,Math.PI*2);
 ctx.fill();
 });
 
-// 🍒
-if(cherry){
-ctx.fillStyle="red";
-ctx.beginPath();
-ctx.arc(ox+cherry.x*grid+10,oy+cherry.y*grid+10,6,0,Math.PI*2);
-ctx.fill();
-}
-
-// 😋
-let ang=0;
-if(pac.dx===1)ang=0;
-if(pac.dx===-1)ang=Math.PI;
-if(pac.dy===1)ang=Math.PI/2;
-if(pac.dy===-1)ang=-Math.PI/2;
-
+// パックマン
 ctx.fillStyle="yellow";
 ctx.beginPath();
-ctx.moveTo(ox+pac.x*grid+10,oy+pac.y*grid+10);
-ctx.arc(
-ox+pac.x*grid+10,
-oy+pac.y*grid+10,
-grid*0.8/2,
-ang+mouth,
-ang-mouth
-);
+ctx.arc(ox+pac.x*grid+10,oy+pac.y*grid+10,8,0,Math.PI*2);
 ctx.fill();
 
-// 👻
+// ゴースト
 ghosts.forEach(g=>{
-ctx.fillStyle=power?"blue":g.c;
+ctx.fillStyle=g.c;
 ctx.beginPath();
-ctx.arc(ox+g.x*grid+10,oy+g.y*grid+10,grid*0.8/2,0,Math.PI*2);
+ctx.arc(ox+g.x*grid+10,oy+g.y*grid+10,8,0,Math.PI*2);
 ctx.fill();
 });
 
@@ -326,6 +309,14 @@ setInterval(()=>{
 update();
 draw();
 },speed);
+
+// スタート
+canvas.addEventListener("touchstart",()=>{
+if(state==="title"){
+init();
+state="play";
+}
+});
 
 </script>
 </body>
