@@ -31,16 +31,10 @@ box-shadow:0 0 20px rgba(0,255,255,0.3);
 #life{font-size:22px;margin-top:5px;}
 
 /* タイトル */
-#title{
-position:absolute;
-top:30%;
-width:100%;
-text-align:center;
-color:#0ff;
-text-shadow:0 0 20px #0ff;
-}
-#title h1{font-size:60px;margin:0;}
-#title p{font-size:24px;}
+<div id="title">
+<h1 style="font-size:12vw;">PACMAN</h1>
+<button id="startBtn" style="font-size:6vw;">Game Start</button>
+</div>
 
 /* コントローラー */
 #pad{
@@ -102,7 +96,10 @@ const ctx=canvas.getContext("2d");
 canvas.width=innerWidth;
 canvas.height=innerHeight;
 
-let grid=Math.floor(canvas.width/21);
+let grid = Math.min(
+  Math.floor(canvas.width / 21),
+  Math.floor(canvas.height / map.length)
+);
 
 // 音
 const audio=new (window.AudioContext||window.webkitAudioContext)();
