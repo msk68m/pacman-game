@@ -2,23 +2,14 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pacman Fixed</title>
+<title>Pacman Simple</title>
 <style>
 body{margin:0;background:black;overflow:hidden;}
-canvas{display:block;}
-#start{
-position:fixed;
-top:50%;
-left:50%;
-transform:translate(-50%,-50%);
-color:white;
-font-size:30px;
-}
+canvas{display:block;margin:auto;background:black;}
 </style>
 </head>
 <body>
 
-<div id="start">TAP TO START</div>
 <canvas id="game"></canvas>
 
 <script>
@@ -29,139 +20,57 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let grid = Math.floor(canvas.width/21);
+let x=100, y=100;
+let dx=0, dy=0;
 
-let state="title";
+// 操作（スワイプ）
+let sx, sy;
 
-let pac={x:1,y:1,dx:0,dy:0};
-let ghosts=[];
-let foods=[];
-let map=[];
-
-const base=[
-"#####################",
-"#.........#.........#",
-"#...................#",
-"#.........P.........#",
-"#...................#",
-"#####################"
-];
-
-// ===== 初期化 =====
-function init(){
-
-map=[...base];
-foods=[];
-
-ghosts=[
-{x:10,y:3,c:"red",dx:1,dy:0}
-];
-
-map.forEach((r,y)=>{
-[...r].forEach((c,x)=>{
-if(c===".") foods.push({x,y});
-if(c==="P"){pac.x=x;pac.y=y;}
+canvas.addEventListener("touchstart",e=>{
+sx=e.touches[0].clientX;
+sy=e.touches[0].clientY;
 });
+
+canvas.addEventListener("touchend",e=>{
+let ex=e.changedTouches[0].clientX;
+let ey=e.changedTouches[0].clientY;
+
+let dx2=ex-sx;
+let dy2=ey-sy;
+
+if(Math.abs(dx2)>Math.abs(dy2)){
+dx=dx2>0?3:-3;
+dy=0;
+}else{
+dy=dy2>0?3:-3;
+dx=0;
+}
 });
-}
 
-// ===== 壁 =====
-function wall(x,y){
-if(y<0||y>=map.length)return true;
-if(x<0||x>=map[0].length)return true;
-return map[y][x]==="#";
-}
-
-// ===== 移動 =====
-function move(o){
-let nx=o.x+o.dx;
-let ny=o.y+o.dy;
-if(!wall(nx,ny)){
-o.x=nx; o.y=ny;
-}
-}
-
-// ===== 操作 =====
-canvas.addEventListener("touchstart", startGame);
-canvas.addEventListener("click", startGame);
-
-function startGame(){
-if(state==="title"){
-init();
-state="play";
-document.getElementById("start").style.display="none";
-}
-}
-
-// ===== 更新 =====
+// 更新
 function update(){
-
-if(state!=="play") return;
-
-move(pac);
-
-foods=foods.filter(f=>{
-if(f.x===pac.x&&f.y===pac.y){
-return false;
-}
-return true;
-});
-
-ghosts.forEach(g=>{
-move(g);
-});
-
+x+=dx;
+y+=dy;
 }
 
-// ===== 描画 =====
+// 描画
 function draw(){
 
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-if(state==="title") return;
-
-let ox=(canvas.width-map[0].length*grid)/2;
-let oy=(canvas.height-map.length*grid)/2;
-
-// 壁
-map.forEach((r,y)=>{
-[...r].forEach((c,x)=>{
-if(c==="#"){
-ctx.fillStyle="blue";
-ctx.fillRect(ox+x*grid,oy+y*grid,grid,grid);
-}
-});
-});
-
-// エサ
-foods.forEach(f=>{
-ctx.fillStyle="white";
-ctx.beginPath();
-ctx.arc(ox+f.x*grid+10,oy+f.y*grid+10,3,0,Math.PI*2);
-ctx.fill();
-});
-
-// パックマン
+// パックマン（丸）
 ctx.fillStyle="yellow";
 ctx.beginPath();
-ctx.arc(ox+pac.x*grid+10,oy+pac.y*grid+10,8,0,Math.PI*2);
+ctx.arc(x,y,20,0,Math.PI*2);
 ctx.fill();
-
-// ゴースト
-ghosts.forEach(g=>{
-ctx.fillStyle=g.c;
-ctx.beginPath();
-ctx.arc(ox+g.x*grid+10,oy+g.y*grid+10,8,0,Math.PI*2);
-ctx.fill();
-});
 
 }
 
-// ===== ループ =====
+// ループ
 setInterval(()=>{
 update();
 draw();
-},150);
+},16);
 
 </script>
 </body>
