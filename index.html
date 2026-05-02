@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pacman Complete</title>
+<title>Pacman Brick Edition</title>
 
 <style>
 body{
 margin:0;
+background:#111;
 overflow:hidden;
-background:black;
 font-family:sans-serif;
 color:white;
 }
@@ -23,7 +23,7 @@ z-index:10;
 }
 #title h1{
 font-size:12vw;
-color:yellow;
+color:#FFD700;
 margin:0;
 }
 #title button{
@@ -122,7 +122,7 @@ let foods=[];
 let ghosts=[];
 let map=[];
 
-// ===== 5ステージ =====
+// ===== 5ステージ（全部同じ幅）=====
 const stages=[
 
 [
@@ -232,7 +232,7 @@ if(state!=="play") return;
 
 move(pac);
 
-// 食べる
+// 食べ物
 foods=foods.filter(f=>{
 if(f.x===pac.x&&f.y===pac.y){
 score+=10;
@@ -281,7 +281,7 @@ ctx.clearRect(0,0,canvas.width,canvas.height);
 
 if(state==="title") return;
 
-// ⭐ サイズ自動調整（重要）
+// ⭐ 正しいサイズ計算（これが超重要）
 let grid=Math.min(
 Math.floor(canvas.width/21),
 Math.floor(canvas.height/map.length)
@@ -290,12 +290,25 @@ Math.floor(canvas.height/map.length)
 let ox=(canvas.width-21*grid)/2;
 let oy=(canvas.height-map.length*grid)/2;
 
-// 壁
+// ===== 壁（レンガ調）=====
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
 if(c==="#"){
-ctx.fillStyle="blue";
-ctx.fillRect(ox+x*grid,oy+y*grid,grid,grid);
+
+let px=ox+x*grid;
+let py=oy+y*grid;
+
+// ベース
+ctx.fillStyle="#8B4513";
+ctx.fillRect(px,py,grid,grid);
+
+// 模様
+ctx.fillStyle="#A0522D";
+ctx.fillRect(px,py,grid,grid/2);
+
+ctx.strokeStyle="#5a2d0c";
+ctx.strokeRect(px,py,grid,grid);
+
 }
 });
 });
