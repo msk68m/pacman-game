@@ -2,88 +2,66 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pacman Neo Ultimate</title>
+<title>Pacman Ultimate Complete</title>
 
 <style>
 body{
 margin:0;
 overflow:hidden;
-font-family:-apple-system,BlinkMacSystemFont;
-background:radial-gradient(circle at 50% 30%, #111, #000);
+font-family:sans-serif;
+background:black;
 color:white;
 }
 
 canvas{display:block;}
 
-/* UI */
-#uiBox{
+#ui{
 position:absolute;
-top:15px;
-left:15px;
-background:rgba(0,0,0,0.5);
-padding:12px 18px;
-border-radius:15px;
-backdrop-filter:blur(10px);
-box-shadow:0 0 20px rgba(0,255,255,0.3);
+top:10px;
+left:10px;
+font-size:28px;
+font-weight:bold;
 }
 
-#score{font-size:20px;}
-#life{font-size:22px;margin-top:5px;}
-
-/* タイトル */
-#title{
+#life{
 position:absolute;
-top:30%;
-width:100%;
-text-align:center;
-color:#0ff;
-text-shadow:0 0 20px #0ff;
+top:50px;
+left:10px;
+font-size:28px;
 }
-#title h1{font-size:60px;margin:0;}
-#title p{font-size:24px;}
 
-/* コントローラー */
 #pad{
 position:fixed;
 bottom:40px;
 left:50%;
 transform:translateX(-50%);
-width:280px;
-height:280px;
+width:260px;
+height:260px;
 }
 
 .btn{
 position:absolute;
 width:90px;
 height:90px;
-border-radius:25px;
-background:linear-gradient(145deg,#222,#111);
-box-shadow:0 0 15px #0ff,inset 0 0 10px #0ff3;
+border-radius:20px;
+background:rgba(255,255,255,0.2);
 display:flex;
 align-items:center;
 justify-content:center;
 font-size:36px;
 }
-.btn:active{transform:scale(0.9);}
 
-.up{top:0;left:95px;}
-.down{bottom:0;left:95px;}
-.left{left:0;top:95px;}
-.right{right:0;top:95px;}
+.up{top:0;left:85px;}
+.down{bottom:0;left:85px;}
+.left{left:0;top:85px;}
+.right{right:0;top:85px;}
 </style>
 </head>
 
 <body>
 
-<div id="uiBox">
-<div id="score"></div>
+<div id="ui"></div>
 <div id="life"></div>
-</div>
-
-<div id="title">
-<h1>PACMAN</h1>
-<p>Tap to Start</p>
-</div>
 
 <canvas id="game"></canvas>
 
@@ -96,16 +74,17 @@ font-size:36px;
 
 <script>
 
+// ===== 基本 =====
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
-
 canvas.width=innerWidth;
 canvas.height=innerHeight;
 
 let grid=Math.floor(canvas.width/21);
 
-// 音
+// ===== 音 =====
 const audio=new (window.AudioContext||window.webkitAudioContext)();
+
 function play(f){
 let o=audio.createOscillator();
 o.frequency.value=f;
@@ -123,9 +102,9 @@ setTimeout(()=>play(500),100);
 setTimeout(()=>play(700),200);
 },600);
 }
-function stopBGM(){clearInterval(bgm);}
+function stopBGM(){ clearInterval(bgm); }
 
-// 状態
+// ===== 状態 =====
 let state="title";
 let stage=0;
 let score=0;
@@ -136,7 +115,7 @@ let ghosts=[];
 let foods=[];
 let map=[];
 
-// ===== 5ステージ（全部21幅）=====
+// ===== ステージ（全21幅統一）=====
 const stages=[
 
 [
@@ -206,7 +185,7 @@ const stages=[
 
 ];
 
-// 初期化
+// ===== 初期化 =====
 function init(){
 map=[...stages[stage]];
 foods=[];
@@ -223,38 +202,42 @@ if(c==="P"){pac.x=x;pac.y=y;}
 });
 }
 
-// 壁
+// ===== 壁 =====
 function wall(x,y){
+if(y<0||y>=map.length)return true;
+if(x<0||x>=map[0].length)return true;
 return map[y][x]==="#";
 }
 
-// 移動
+// ===== 移動 =====
 function move(o){
 let nx=o.x+o.dx;
 let ny=o.y+o.dy;
 
-if(nx<0) nx=20;
-if(nx>20) nx=0;
+// ワープ
+if(nx<0) nx=map[0].length-1;
+if(nx>=map[0].length) nx=0;
 
 if(!wall(nx,ny)){
-o.x=nx;o.y=ny;
+o.x=nx;
+o.y=ny;
 }
 }
 
-// 更新
+// ===== 更新 =====
 function update(){
 
-if(state!=="play") return;
+if(state==="title") return;
 
 move(pac);
 
-// 向き
+// 方向
 if(pac.dx===1) pac.dir=0;
 if(pac.dx===-1) pac.dir=Math.PI;
 if(pac.dy===1) pac.dir=Math.PI/2;
 if(pac.dy===-1) pac.dir=-Math.PI/2;
 
-// エサ
+// 食べ物
 foods=foods.filter(f=>{
 if(f.x===pac.x&&f.y===pac.y){
 score+=10;
@@ -266,11 +249,20 @@ return true;
 
 // ゴースト
 ghosts.forEach(g=>{
+
+// AI（追尾＋ランダム）
+if(Math.random()<0.3){
+let d=[[1,0],[-1,0],[0,1],[0,-1]];
+let r=d[Math.floor(Math.random()*4)];
+g.dx=r[0]; g.dy=r[1];
+}else{
 g.dx=Math.sign(pac.x-g.x);
 g.dy=Math.sign(pac.y-g.y);
+}
 
 move(g);
 
+// 衝突
 if(g.x===pac.x&&g.y===pac.y){
 life--;
 play(200);
@@ -281,14 +273,14 @@ life=5;
 score=0;
 stage=0;
 stopBGM();
-document.getElementById("title").style.display="block";
 }else{
-pac.x=1;pac.y=1;
+pac.x=1; pac.y=1;
 }
 }
+
 });
 
-// クリア → 次ステージ
+// クリア
 if(foods.length===0){
 play(1000);
 stage=(stage+1)%5;
@@ -297,43 +289,45 @@ init();
 
 }
 
-// 描画
+// ===== 描画 =====
 function draw(){
 
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-if(state==="title") return;
+if(state==="title"){
+ctx.fillStyle="yellow";
+ctx.font=(canvas.width*0.6)+"px sans-serif";
+ctx.fillText("PAC",canvas.width*0.1,200);
 
-let ox=(canvas.width-21*grid)/2;
+ctx.font=(canvas.width*0.3)+"px sans-serif";
+ctx.fillText("TAP",canvas.width*0.2,350);
+return;
+}
+
+let ox=(canvas.width-map[0].length*grid)/2;
 let oy=(canvas.height-map.length*grid)/2;
 
-// 壁（ネオン）
+// 壁
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
 if(c==="#"){
-ctx.fillStyle="#0ff";
-ctx.shadowColor="#0ff";
-ctx.shadowBlur=10;
+ctx.fillStyle="blue";
 ctx.fillRect(ox+x*grid,oy+y*grid,grid,grid);
 }
 });
 });
 
 // エサ
-ctx.shadowBlur=0;
 foods.forEach(f=>{
 ctx.fillStyle="white";
 ctx.beginPath();
-ctx.arc(ox+f.x*grid+grid/2,oy+f.y*grid+grid/2,grid*0.2,0,Math.PI*2);
+ctx.arc(ox+f.x*grid+grid/2,oy+f.y*grid+grid/2,grid*0.25,0,Math.PI*2);
 ctx.fill();
 });
 
-// パックマン
+// パックマン（口）
 pac.anim+=0.2;
 let m=Math.abs(Math.sin(pac.anim))*0.5;
-
-ctx.shadowColor="yellow";
-ctx.shadowBlur=20;
 
 ctx.fillStyle="yellow";
 ctx.beginPath();
@@ -347,45 +341,41 @@ pac.dir+Math.PI*2-m
 );
 ctx.fill();
 
-ctx.shadowBlur=0;
-
 // ゴースト
 ghosts.forEach(g=>{
 ctx.fillStyle="red";
-ctx.shadowColor="red";
-ctx.shadowBlur=15;
 ctx.beginPath();
 ctx.arc(ox+g.x*grid+grid/2,oy+g.y*grid+grid/2,grid*0.45,0,Math.PI*2);
 ctx.fill();
-ctx.shadowBlur=0;
 });
 
 // UI
-document.getElementById("score").innerText=
-"Score: "+score+"  Stage: "+(stage+1);
+document.getElementById("ui").innerText=
+"Score:"+score+"  Stage:"+(stage+1);
 
-document.getElementById("life").innerText="❤️".repeat(life);
+let h="";
+for(let i=0;i<life;i++) h+="❤️";
+document.getElementById("life").innerText=h;
 
 }
 
-// ループ
+// ===== ループ =====
 setInterval(()=>{
 update();
 draw();
 },180);
 
-// スタート
+// ===== スタート =====
 canvas.addEventListener("touchstart",()=>{
 if(state==="title"){
 play(900);
 init();
 state="play";
 startBGM();
-document.getElementById("title").style.display="none";
 }
 });
 
-// 操作
+// ===== 操作 =====
 document.querySelector(".up").onclick=()=>{pac.dx=0;pac.dy=-1;}
 document.querySelector(".down").onclick=()=>{pac.dx=0;pac.dy=1;}
 document.querySelector(".left").onclick=()=>{pac.dx=-1;pac.dy=0;}
