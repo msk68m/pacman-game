@@ -2,39 +2,34 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pacman Ultimate+</title>
+<title>Pacman Ultimate Complete</title>
 
 <style>
 body{
 margin:0;
 overflow:hidden;
 font-family:sans-serif;
-background:
-radial-gradient(circle at 30% 30%, #1a1a1a, #000),
-repeating-linear-gradient(45deg,#111 0,#111 8px,#000 8px,#000 16px);
+background:black;
 color:white;
 }
 
 canvas{display:block;}
 
-/* UI */
 #ui{
 position:absolute;
 top:10px;
-left:15px;
-font-size:28px; /* ④大きく */
+left:10px;
+font-size:28px;
 font-weight:bold;
 }
 
-/* ライフ表示 */
 #life{
 position:absolute;
 top:50px;
-left:15px;
-font-size:24px;
+left:10px;
+font-size:28px;
 }
 
-/* 🎮 コントローラー（大きく＆離す） */
 #pad{
 position:fixed;
 bottom:40px;
@@ -49,20 +44,17 @@ position:absolute;
 width:90px;
 height:90px;
 border-radius:20px;
-background:rgba(255,255,255,0.15);
-border:2px solid rgba(255,255,255,0.5);
+background:rgba(255,255,255,0.2);
 display:flex;
 align-items:center;
 justify-content:center;
 font-size:36px;
 }
 
-/* 十字配置（距離広げた） */
 .up{top:0;left:85px;}
 .down{bottom:0;left:85px;}
 .left{left:0;top:85px;}
 .right{right:0;top:85px;}
-
 </style>
 </head>
 
@@ -82,165 +74,233 @@ font-size:36px;
 
 <script>
 
+// ===== 基本 =====
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
-
-canvas.width=window.innerWidth;
-canvas.height=window.innerHeight;
+canvas.width=innerWidth;
+canvas.height=innerHeight;
 
 let grid=Math.floor(canvas.width/21);
 
+// ===== 音 =====
+const audio=new (window.AudioContext||window.webkitAudioContext)();
+
+function play(f){
+let o=audio.createOscillator();
+o.frequency.value=f;
+o.connect(audio.destination);
+o.start();
+setTimeout(()=>o.stop(),80);
+}
+
+// BGM
+let bgm;
+function startBGM(){
+bgm=setInterval(()=>{
+play(300);
+setTimeout(()=>play(500),100);
+setTimeout(()=>play(700),200);
+},600);
+}
+function stopBGM(){ clearInterval(bgm); }
+
+// ===== 状態 =====
 let state="title";
+let stage=0;
 let score=0;
-let hiScore=localStorage.getItem("hi")||0;
-let stage=1;
-let life=5; // ①
+let life=5;
 
 let pac={x:1,y:1,dx:0,dy:0,dir:0,anim:0};
 let ghosts=[];
 let foods=[];
 let map=[];
-let power=false;
-let powerTimer=0;
 
-let audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+// ===== ステージ（全21幅統一）=====
+const stages=[
 
-// 音
-function beep(freq){
-let o=audioCtx.createOscillator();
-o.frequency.value=freq;
-o.connect(audioCtx.destination);
-o.start();
-setTimeout(()=>o.stop(),100);
-}
-
-const base=[ /* 省略せずそのまま前回と同じ */ 
+[
 "#####################",
 "#.........#.........#",
 "#.###.###.#.###.###.#",
-"#o###.###.#.###.###o#",
+"#o........P........o#",
 "#...................#",
 "#.###.#.#####.#.###.#",
 "#.....#...#...#.....#",
-"#####.### # ###.#####",
-"#.........P.........#",
+"#####.###.#.###.#####",
 "#...................#",
-"#.###.#####.#####.###",
-"#o.................o#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#.######### #########",
-"#...................#",
-"#.###.###.#.###.###.#",
-"#.........#.........#",
 "#####################"
+],
+
+[
+"#####################",
+"#...................#",
+"#.#####.###.#####.#.#",
+"#....P............#.#",
+"#.#####.###.#####.#.#",
+"#...................#",
+"#.#####.###.#####.#.#",
+"#...................#",
+"#...................#",
+"#####################"
+],
+
+[
+"#####################",
+"#..#.....#.....#....#",
+"#..#.###.#.###.#.##.#",
+"#P.................o#",
+"#..#.###.#.###.#.##.#",
+"#..#.....#.....#....#",
+"#..#####.#.#####....#",
+"#...................#",
+"#...................#",
+"#####################"
+],
+
+[
+"#####################",
+"#...................#",
+"#.###.#####.###.###.#",
+"#P.................o#",
+"#.###.#####.###.###.#",
+"#...................#",
+"#.###.#####.###.###.#",
+"#...................#",
+"#...................#",
+"#####################"
+],
+
+[
+"#####################",
+"#.#.#.#.#.#.#.#.#.#.#",
+"#........P.........o#",
+"#.#.#.#.#.#.#.#.#.#.#",
+"#...................#",
+"#.#.#.#.#.#.#.#.#.#.#",
+"#...................#",
+"#.#.#.#.#.#.#.#.#.#.#",
+"#...................#",
+"#####################"
+]
+
 ];
 
+// ===== 初期化 =====
 function init(){
-map=[...base];
+map=[...stages[stage]];
 foods=[];
 ghosts=[
-{x:10,y:8,c:"red"},
-{x:9,y:8,c:"pink"},
-{x:11,y:8,c:"cyan"},
-{x:10,y:7,c:"orange"}
+{x:10,y:3,dx:1,dy:0},
+{x:9,y:3,dx:-1,dy:0}
 ];
 
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
-if(c==="."||c==="o") foods.push({x,y,p:c==="o"});
+if(c==="."||c==="o") foods.push({x,y});
 if(c==="P"){pac.x=x;pac.y=y;}
 });
 });
 }
 
+// ===== 壁 =====
+function wall(x,y){
+if(y<0||y>=map.length)return true;
+if(x<0||x>=map[0].length)return true;
+return map[y][x]==="#";
+}
+
+// ===== 移動 =====
 function move(o){
 let nx=o.x+o.dx;
 let ny=o.y+o.dy;
+
+// ワープ
 if(nx<0) nx=map[0].length-1;
 if(nx>=map[0].length) nx=0;
-if(map[ny][nx]!=="#"){
-o.x=nx;o.y=ny;
+
+if(!wall(nx,ny)){
+o.x=nx;
+o.y=ny;
 }
 }
 
+// ===== 更新 =====
 function update(){
 
 if(state==="title") return;
 
 move(pac);
 
-// 方向保存（②）
+// 方向
 if(pac.dx===1) pac.dir=0;
-if(pac.dy===1) pac.dir=Math.PI/2;
 if(pac.dx===-1) pac.dir=Math.PI;
+if(pac.dy===1) pac.dir=Math.PI/2;
 if(pac.dy===-1) pac.dir=-Math.PI/2;
 
 // 食べ物
 foods=foods.filter(f=>{
 if(f.x===pac.x&&f.y===pac.y){
-score+=f.p?50:10;
-beep(600);
-
-if(f.p){
-power=true;
-powerTimer=60;
-}
+score+=10;
+play(700);
 return false;
 }
 return true;
 });
 
-// パワー
-if(power){
-powerTimer--;
-if(powerTimer<=0) power=false;
-}
-
-// ゴースト（少し賢く）
+// ゴースト
 ghosts.forEach(g=>{
-let dx=pac.x-g.x;
-let dy=pac.y-g.y;
 
-g.dx=Math.sign(dx);
-g.dy=Math.sign(dy);
+// AI（追尾＋ランダム）
+if(Math.random()<0.3){
+let d=[[1,0],[-1,0],[0,1],[0,-1]];
+let r=d[Math.floor(Math.random()*4)];
+g.dx=r[0]; g.dy=r[1];
+}else{
+g.dx=Math.sign(pac.x-g.x);
+g.dy=Math.sign(pac.y-g.y);
+}
 
 move(g);
 
+// 衝突
 if(g.x===pac.x&&g.y===pac.y){
-if(power){
-g.x=10;g.y=8;
-score+=200;
-beep(200);
-}else{
 life--;
-pac.x=1;pac.y=1;
+play(200);
 
 if(life<=0){
-if(score>hiScore){
-hiScore=score;
-localStorage.setItem("hi",hiScore);
-}
 state="title";
-score=0;
 life=5;
+score=0;
+stage=0;
+stopBGM();
+}else{
+pac.x=1; pac.y=1;
 }
 }
-}
+
 });
 
+// クリア
+if(foods.length===0){
+play(1000);
+stage=(stage+1)%5;
+init();
 }
 
-// 描画
+}
+
+// ===== 描画 =====
 function draw(){
 
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
 if(state==="title"){
 ctx.fillStyle="yellow";
-ctx.font="bold 48px sans-serif";
-ctx.fillText("PAC-MAN",canvas.width/2-120,200);
-ctx.fillText("TAP",canvas.width/2-50,260);
+ctx.font=(canvas.width*0.6)+"px sans-serif";
+ctx.fillText("PAC",canvas.width*0.1,200);
+
+ctx.font=(canvas.width*0.3)+"px sans-serif";
+ctx.fillText("TAP",canvas.width*0.2,350);
 return;
 }
 
@@ -251,7 +311,7 @@ let oy=(canvas.height-map.length*grid)/2;
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
 if(c==="#"){
-ctx.fillStyle="#8B4513";
+ctx.fillStyle="blue";
 ctx.fillRect(ox+x*grid,oy+y*grid,grid,grid);
 }
 });
@@ -259,13 +319,13 @@ ctx.fillRect(ox+x*grid,oy+y*grid,grid,grid);
 
 // エサ
 foods.forEach(f=>{
-ctx.fillStyle=f.p?"yellow":"white";
+ctx.fillStyle="white";
 ctx.beginPath();
 ctx.arc(ox+f.x*grid+grid/2,oy+f.y*grid+grid/2,grid*0.25,0,Math.PI*2);
 ctx.fill();
 });
 
-// パックマン（②方向）
+// パックマン（口）
 pac.anim+=0.2;
 let m=Math.abs(Math.sin(pac.anim))*0.5;
 
@@ -283,7 +343,7 @@ ctx.fill();
 
 // ゴースト
 ghosts.forEach(g=>{
-ctx.fillStyle=power?"blue":g.c;
+ctx.fillStyle="red";
 ctx.beginPath();
 ctx.arc(ox+g.x*grid+grid/2,oy+g.y*grid+grid/2,grid*0.45,0,Math.PI*2);
 ctx.fill();
@@ -291,32 +351,35 @@ ctx.fill();
 
 // UI
 document.getElementById("ui").innerText=
-`Score:${score}  Hi:${hiScore}`;
+"Score:"+score+"  Stage:"+(stage+1);
 
-// ① ライフをパックマンで表示
-let lifeStr="";
-for(let i=0;i<life;i++) lifeStr+="🟡";
-document.getElementById("life").innerText=lifeStr;
+let h="";
+for(let i=0;i<life;i++) h+="❤️";
+document.getElementById("life").innerText=h;
 
 }
 
-// 操作
+// ===== ループ =====
+setInterval(()=>{
+update();
+draw();
+},180);
+
+// ===== スタート =====
+canvas.addEventListener("touchstart",()=>{
+if(state==="title"){
+play(900);
+init();
+state="play";
+startBGM();
+}
+});
+
+// ===== 操作 =====
 document.querySelector(".up").onclick=()=>{pac.dx=0;pac.dy=-1;}
 document.querySelector(".down").onclick=()=>{pac.dx=0;pac.dy=1;}
 document.querySelector(".left").onclick=()=>{pac.dx=-1;pac.dy=0;}
 document.querySelector(".right").onclick=()=>{pac.dx=1;pac.dy=0;}
-
-setInterval(()=>{
-update();
-draw();
-},200);
-
-canvas.addEventListener("touchstart",()=>{
-if(state==="title"){
-init();
-state="play";
-}
-});
 
 </script>
 </body>
