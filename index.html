@@ -2,90 +2,100 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pacman Pro</title>
+<title>Pacman Ultimate</title>
 
 <style>
 body{
 margin:0;
-background:black;
 overflow:hidden;
 font-family:sans-serif;
 color:white;
+background:
+radial-gradient(circle at 30% 30%, #1a1a1a, #000),
+repeating-linear-gradient(45deg,#111 0,#111 8px,#000 8px,#000 16px);
 }
 
-canvas{
-display:block;
+canvas{display:block;}
+
+/* スコア */
+#ui{
+position:absolute;
+top:10px;
+left:15px;
+font-size:22px;
+font-weight:bold;
+text-shadow:2px 2px 5px black;
 }
 
-/* 🎮 コントローラー */
+/* 🎮 コントローラー（十字キー） */
 #pad{
 position:fixed;
-bottom:20px;
+bottom:30px;
 left:50%;
 transform:translateX(-50%);
-width:200px;
-height:200px;
+width:220px;
+height:220px;
 }
 
 .btn{
 position:absolute;
-width:60px;
-height:60px;
-border-radius:50%;
-background:rgba(255,255,255,0.1);
-backdrop-filter:blur(5px);
-border:2px solid rgba(255,255,255,0.3);
+width:70px;
+height:70px;
+border-radius:15px;
+background:rgba(255,255,255,0.15);
+border:2px solid rgba(255,255,255,0.4);
 display:flex;
 align-items:center;
 justify-content:center;
-font-size:24px;
-color:white;
+font-size:28px;
+backdrop-filter:blur(6px);
 }
 
-.up{top:0;left:70px;}
-.down{bottom:0;left:70px;}
-.left{left:0;top:70px;}
-.right{right:0;top:70px;}
+/* 十字配置 */
+.up{top:0;left:75px;}
+.down{bottom:0;left:75px;}
+.left{left:0;top:75px;}
+.right{right:0;top:75px;}
 </style>
-
 </head>
 
 <body>
 
+<div id="ui"></div>
 <canvas id="game"></canvas>
 
-<!-- 🎮 コントローラー -->
 <div id="pad">
-<div class="btn up">▲</div>
-<div class="btn down">▼</div>
-<div class="btn left">◀</div>
-<div class="btn right">▶</div>
+<div class="btn up">⬆️</div>
+<div class="btn down">⬇️</div>
+<div class="btn left">⬅️</div>
+<div class="btn right">➡️</div>
 </div>
 
 <script>
 
-// ===== 画面 =====
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
 
-let grid = Math.floor(canvas.width/21);
+let grid=Math.floor(canvas.width/21);
 
-// ===== 状態 =====
+// 状態
 let state="title";
 let score=0;
 let stage=1;
 let life=3;
-let speed=140;
+let speed=220;
 
-let pac={x:1,y:1,dx:0,dy:0};
+let pac={x:1,y:1,dx:0,dy:0,anim:0};
 let ghosts=[];
 let foods=[];
 let map=[];
+let power=false;
+let powerTimer=0;
 
-// ===== マップ =====
+// マップ
 const base=[
 "#####################",
 "#.........#.........#",
@@ -108,7 +118,7 @@ const base=[
 "#####################"
 ];
 
-// ===== 初期化 =====
+// 初期化
 function init(){
 
 map=[...base];
@@ -129,26 +139,24 @@ if(c==="P"){pac.x=x;pac.y=y;}
 });
 }
 
-// ===== コントローラー =====
+// 操作
 document.querySelector(".up").onclick=()=>{pac.dx=0;pac.dy=-1;}
 document.querySelector(".down").onclick=()=>{pac.dx=0;pac.dy=1;}
 document.querySelector(".left").onclick=()=>{pac.dx=-1;pac.dy=0;}
 document.querySelector(".right").onclick=()=>{pac.dx=1;pac.dy=0;}
 
-// ===== 壁 =====
+// 壁
 function wall(x,y){
 if(y<0||y>=map.length)return true;
 if(x<0||x>=map[0].length)return true;
 return map[y][x]==="#";
 }
 
-// ===== 移動 =====
+// 移動
 function move(o){
-
 let nx=o.x+o.dx;
 let ny=o.y+o.dy;
 
-// ワープ
 if(nx<0) nx=map[0].length-1;
 if(nx>=map[0].length) nx=0;
 
@@ -158,29 +166,13 @@ o.y=ny;
 }
 }
 
-// ===== AI =====
+// AI
 function getTarget(g){
-
-if(g.c==="red") return {x:pac.x,y:pac.y};
-
-if(g.c==="pink"){
-return {x:pac.x+pac.dx*4,y:pac.y+pac.dy*4};
-}
-
-if(g.c==="cyan"){
-return {x:pac.x+(Math.random()*6-3),y:pac.y+(Math.random()*6-3)};
-}
-
-let dist=Math.abs(pac.x-g.x)+Math.abs(pac.y-g.y);
-
-if(dist<5){
-return {x:1,y:1};
-}else{
+if(power) return {x:1,y:1};
 return {x:pac.x,y:pac.y};
 }
-}
 
-// ===== 更新 =====
+// 更新
 function update(){
 
 if(state==="title") return;
@@ -190,13 +182,26 @@ move(pac);
 // 食べ物
 foods=foods.filter(f=>{
 if(f.x===pac.x&&f.y===pac.y){
-score+=10;
+
+score+=f.p?50:10;
+
+if(f.p){
+power=true;
+powerTimer=50;
+}
+
 return false;
 }
 return true;
 });
 
-// 👻
+// パワー時間
+if(power){
+powerTimer--;
+if(powerTimer<=0) power=false;
+}
+
+// ゴースト
 ghosts.forEach(g=>{
 
 let target=getTarget(g);
@@ -229,11 +234,14 @@ move(g);
 
 // 衝突
 if(g.x===pac.x&&g.y===pac.y){
+
+if(power){
+g.x=10; g.y=8;
+score+=200;
+}else{
 life--;
 pac.x=1; pac.y=1;
-
-if(life<=0){
-state="title";
+if(life<=0) state="title";
 }
 }
 
@@ -242,69 +250,79 @@ state="title";
 // クリア
 if(foods.length===0){
 stage++;
-if(stage>10) stage=1;
 init();
 }
 
 }
 
-// ===== 描画 =====
+// 描画
 function draw(){
 
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
 if(state==="title"){
 ctx.fillStyle="yellow";
-ctx.font="40px sans-serif";
-ctx.fillText("PACMAN",canvas.width/2-90,200);
-ctx.fillText("Tap to Start",canvas.width/2-110,260);
+ctx.font="bold 48px sans-serif";
+ctx.fillText("PAC-MAN",canvas.width/2-120,200);
+ctx.font="20px sans-serif";
+ctx.fillText("TAP TO START",canvas.width/2-80,250);
 return;
 }
 
 let ox=(canvas.width-map[0].length*grid)/2;
 let oy=(canvas.height-map.length*grid)/2;
 
-// 壁
+// 壁（レンガ）
 map.forEach((r,y)=>{
 [...r].forEach((c,x)=>{
 if(c==="#"){
-ctx.fillStyle="blue";
+ctx.fillStyle="#8B4513";
 ctx.fillRect(ox+x*grid,oy+y*grid,grid,grid);
+ctx.strokeStyle="#5a2d0c";
+ctx.strokeRect(ox+x*grid,oy+y*grid,grid,grid);
 }
 });
 });
 
 // 食べ物
 foods.forEach(f=>{
-ctx.fillStyle="white";
+ctx.fillStyle=f.p?"yellow":"white";
 ctx.beginPath();
-ctx.arc(ox+f.x*grid+10,oy+f.y*grid+10,3,0,Math.PI*2);
+ctx.arc(ox+f.x*grid+grid/2,oy+f.y*grid+grid/2,grid*0.25,0,Math.PI*2);
 ctx.fill();
 });
 
-// パックマン
+// パックマン（口アニメ）
+pac.anim+=0.2;
+let mouth=Math.abs(Math.sin(pac.anim))*0.5;
+
 ctx.fillStyle="yellow";
 ctx.beginPath();
-ctx.arc(ox+pac.x*grid+10,oy+pac.y*grid+10,8,0,Math.PI*2);
+ctx.moveTo(ox+pac.x*grid+grid/2,oy+pac.y*grid+grid/2);
+ctx.arc(
+ox+pac.x*grid+grid/2,
+oy+pac.y*grid+grid/2,
+grid*0.45,
+mouth,
+Math.PI*2-mouth
+);
 ctx.fill();
 
 // ゴースト
 ghosts.forEach(g=>{
-ctx.fillStyle=g.c;
+ctx.fillStyle=power?"blue":g.c;
 ctx.beginPath();
-ctx.arc(ox+g.x*grid+10,oy+g.y*grid+10,8,0,Math.PI*2);
+ctx.arc(ox+g.x*grid+grid/2,oy+g.y*grid+grid/2,grid*0.45,0,Math.PI*2);
 ctx.fill();
 });
 
 // UI
-ctx.fillStyle="white";
-ctx.fillText("Score:"+score,20,30);
-ctx.fillText("Life:"+life,20,60);
-ctx.fillText("Stage:"+stage,20,90);
+document.getElementById("ui").innerText=
+`Score:${score}  Life:${life}  Stage:${stage}`;
 
 }
 
-// ===== ループ =====
+// ループ
 setInterval(()=>{
 update();
 draw();
