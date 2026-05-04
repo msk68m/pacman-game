@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pacman Classic</title>
+<title>Pacman Full</title>
 
 <style>
 body{
@@ -13,55 +13,51 @@ font-family:monospace;
 color:white;
 }
 
-/* キャンバス */
 canvas{
 display:block;
 }
 
-/* UI */
 #ui{
 position:fixed;
 top:10px;
 left:10px;
-font-size:22px;
+font-size:24px;
 font-weight:bold;
-color:#fff;
-text-shadow:0 0 5px #fff;
 }
 
-/* コントローラー（開始後のみ表示） */
+/* コントローラー */
 #pad{
 position:fixed;
-bottom:40px;
+bottom:30px;
 left:50%;
 transform:translateX(-50%);
 display:none;
 }
 
 .btn{
-width:70px;
-height:70px;
-margin:10px;
-border-radius:15px;
+width:80px;
+height:80px;
+margin:12px;
+border-radius:20px;
 background:rgba(255,255,255,0.15);
 border:2px solid #aaa;
+font-size:32px;
 color:white;
-font-size:30px;
-display:inline-flex;
+display:flex;
 align-items:center;
 justify-content:center;
 }
+
 .row{
 display:flex;
 justify-content:center;
 }
 </style>
-
 </head>
+
 <body>
 
 <canvas id="game"></canvas>
-
 <div id="ui"></div>
 
 <div id="pad">
@@ -82,174 +78,95 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-const grid = 24;
+// ===== マップ =====
+const mapData = [
+"#####################",
+"#P........#.........#",
+"#.###.###.#.###.###.#",
+"#o###.###.#.###.###o#",
+"#...................#",
+"#.###.#.#####.#.###.#",
+"#.....#...#...#.....#",
+"#####.### # ###.#####",
+"#...................#",
+"#.###.#####.#####.###",
+"#o.................o#",
+"#.###.#.#####.#.###.#",
+"#.....#...#...#.....#",
+"#.######### #########",
+"#...................#",
+"#.###.###.#.###.###.#",
+"#.........#.........#",
+"#####################"
+];
+
+let map=[...mapData];
+
+// ===== スケーリング（ここが重要）=====
+let grid;
+function resize(){
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+grid = Math.floor(
+Math.min(
+canvas.width / map[0].length,
+canvas.height / map.length
+)
+);
+}
+resize();
+window.onresize=resize;
 
 // ===== 状態 =====
 let state="title";
 let score=0;
 let life=5;
-let stage=0;
 
-// 方向予約
+let pac={x:1,y:1,dx:0,dy:0};
 let nextDir={x:0,y:0};
 
-// ===== 5面 =====
-const stages = [
-[
-"#####################",
-"#.........#.........#",
-"#.###.###.#.###.###.#",
-"#o###.###.#.###.###o#",
-"#...................#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#####.### # ###.#####",
-"#.........P.........#",
-"#...................#",
-"#.###.#####.#####.###",
-"#o.................o#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#.######### #########",
-"#...................#",
-"#.###.###.#.###.###.#",
-"#.........#.........#",
-"#####################"
-],
-// ↓少しだけ変えたステージ
-[
-"#####################",
-"#.........#.........#",
-"#.###.###.#.###.###.#",
-"#o###.###.#.###.###o#",
-"#........P..........#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#####.### # ###.#####",
-"#...................#",
-"#.###.#####.#####.###",
-"#o.................o#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#.######### #########",
-"#...................#",
-"#.###.###.#.###.###.#",
-"#.........#.........#",
-"#.........#.........#",
-"#####################"
-],
-// あと3面コピーでOK（省略しないでちゃんと5面）
-[
-"#####################",
-"#o..................#",
-"#.###.###.#.###.###.#",
-"#.........#.........#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#####.### # ###.#####",
-"#.........P.........#",
-"#...................#",
-"#.###.#####.#####.###",
-"#.................o#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#.######### #########",
-"#...................#",
-"#.###.###.#.###.###.#",
-"#.........#.........#",
-"#o..................#",
-"#####################"
-],
-[
-"#####################",
-"#.........#.........#",
-"#.###.###.#.###.###.#",
-"#o..................#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#####.### # ###.#####",
-"#...................#",
-"#.###.#####.#####.###",
-"#.........P.........#",
-"#o.................o#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#.######### #########",
-"#...................#",
-"#.###.###.#.###.###.#",
-"#.........#.........#",
-"#...................#",
-"#####################"
-],
-[
-"#####################",
-"#o..................#",
-"#.###.###.#.###.###.#",
-"#.........#.........#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#####.### # ###.#####",
-"#.........P.........#",
-"#...................#",
-"#.###.#####.#####.###",
-"#.................o#",
-"#.###.#.#####.#.###.#",
-"#.....#...#...#.....#",
-"#.######### #########",
-"#...................#",
-"#.###.###.#.###.###.#",
-"#.........#.........#",
-"#o..................#",
-"#####################"
-]
-];
-
-let map,foods=[],ghosts=[];
-let powerMode=0;
+let foods=[];
+let ghosts=[];
+let power=0;
 
 // ===== 初期化 =====
 function init(){
 
-map=[...stages[stage]];
 foods=[];
-
 ghosts=[
-{x:10,y:8,color:"red"},
-{x:9,y:8,color:"pink"},
-{x:11,y:8,color:"cyan"}
+{x:10,y:8},
+{x:9,y:8}
 ];
 
-map.forEach((row,y)=>{
-[...row].forEach((c,x)=>{
+map.forEach((r,y)=>{
+[...r].forEach((c,x)=>{
 if(c==="."||c==="o") foods.push({x,y,p:c==="o"});
 if(c==="P"){pac.x=x;pac.y=y;}
 });
 });
 }
 
-// ===== パックマン =====
-let pac={x:1,y:1,dx:0,dy:0};
-
 // ===== 壁 =====
 function wall(x,y){
 return map[y][x]==="#";
 }
 
-// ===== 移動 =====
-function move(obj){
+// ===== 移動（予約対応）=====
+function move(){
 
-// 方向予約
-if(!wall(obj.x+nextDir.x,obj.y+nextDir.y)){
-obj.dx=nextDir.x;
-obj.dy=nextDir.y;
+// 次の方向に行けるなら即変更
+if(!wall(pac.x+nextDir.x,pac.y+nextDir.y)){
+pac.dx=nextDir.x;
+pac.dy=nextDir.y;
 }
 
-let nx=obj.x+obj.dx;
-let ny=obj.y+obj.dy;
+let nx=pac.x+pac.dx;
+let ny=pac.y+pac.dy;
 
 if(!wall(nx,ny)){
-obj.x=nx;
-obj.y=ny;
+pac.x=nx;
+pac.y=ny;
 }
 }
 
@@ -258,29 +175,22 @@ function update(){
 
 if(state==="title") return;
 
-move(pac);
+move();
 
 // 食べる
 foods=foods.filter(f=>{
 if(f.x===pac.x && f.y===pac.y){
-
 score+=10;
-
-if(f.p){
-powerMode=200;
-score+=50;
-}
-
+if(f.p) power=200;
 return false;
 }
 return true;
 });
 
-// 👻
+// ゴースト
 ghosts.forEach(g=>{
-
 let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-let d=dirs[Math.floor(Math.random()*dirs.length)];
+let d=dirs[Math.floor(Math.random()*4)];
 
 if(!wall(g.x+d[0],g.y+d[1])){
 g.x+=d[0];
@@ -289,30 +199,22 @@ g.y+=d[1];
 
 // 衝突
 if(g.x===pac.x && g.y===pac.y){
-
-if(powerMode>0){
-score+=200;
+if(power>0){
 g.x=10; g.y=8;
+score+=200;
 }else{
 life--;
+init();
 if(life<=0){
 state="title";
-score=0;
 life=5;
+score=0;
 }
-init();
 }
 }
-
 });
 
-if(powerMode>0) powerMode--;
-
-// クリア
-if(foods.length===0){
-stage=(stage+1)%5;
-init();
-}
+if(power>0) power--;
 }
 
 // ===== 描画 =====
@@ -320,19 +222,17 @@ function draw(){
 
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// タイトル
+// 中央配置
+let ox=(canvas.width-map[0].length*grid)/2;
+let oy=(canvas.height-map.length*grid)/2;
+
 if(state==="title"){
 ctx.fillStyle="yellow";
 ctx.font="bold 60px sans-serif";
-ctx.fillText("PACMAN",canvas.width/2-140,200);
-
-ctx.font="30px sans-serif";
-ctx.fillText("GAME START",canvas.width/2-110,260);
+ctx.fillText("PACMAN",canvas.width/2-120,200);
+ctx.fillText("TAP TO START",canvas.width/2-140,260);
 return;
 }
-
-let ox=40;
-let oy=100;
 
 // 壁
 map.forEach((r,y)=>{
@@ -344,46 +244,57 @@ ctx.fillRect(ox+x*grid,oy+y*grid,grid,grid);
 });
 });
 
-// 餌
+// 餌（2倍）
 foods.forEach(f=>{
 ctx.fillStyle=f.p?"orange":"white";
 ctx.beginPath();
-ctx.arc(ox+f.x*grid+12,oy+f.y*grid+12,f.p?6:3,0,Math.PI*2);
+ctx.arc(
+ox+f.x*grid+grid/2,
+oy+f.y*grid+grid/2,
+f.p?grid/3:grid/6,
+0,Math.PI*2
+);
 ctx.fill();
 });
 
-// パックマン（口の向き）
-ctx.fillStyle="yellow";
+// パックマン（2倍＋向き）
 let angle=0;
-
 if(pac.dx===1) angle=0;
 if(pac.dx===-1) angle=Math.PI;
 if(pac.dy===1) angle=Math.PI/2;
 if(pac.dy===-1) angle=-Math.PI/2;
 
+ctx.fillStyle="yellow";
 ctx.beginPath();
-ctx.moveTo(ox+pac.x*grid+12,oy+pac.y*grid+12);
+ctx.moveTo(
+ox+pac.x*grid+grid/2,
+oy+pac.y*grid+grid/2
+);
 ctx.arc(
-ox+pac.x*grid+12,
-oy+pac.y*grid+12,
-10,
+ox+pac.x*grid+grid/2,
+oy+pac.y*grid+grid/2,
+grid/2.2,
 angle+0.3,
 angle-0.3+Math.PI*2
 );
 ctx.fill();
 
-// ゴースト
+// ゴースト（2倍）
 ghosts.forEach(g=>{
-ctx.fillStyle=powerMode>0?"blue":g.color;
+ctx.fillStyle=power>0?"blue":"red";
 ctx.beginPath();
-ctx.arc(ox+g.x*grid+12,oy+g.y*grid+12,10,0,Math.PI*2);
+ctx.arc(
+ox+g.x*grid+grid/2,
+oy+g.y*grid+grid/2,
+grid/2.2,
+0,Math.PI*2
+);
 ctx.fill();
 });
 
 // UI
 document.getElementById("ui").innerHTML =
-"Score:"+score+" Stage:"+(stage+1)+"<br>"+("❤️".repeat(life));
-
+"Score:"+score+"<br>"+("❤️".repeat(life));
 }
 
 // ===== ループ =====
@@ -393,10 +304,10 @@ draw();
 },120);
 
 // ===== 操作 =====
-document.getElementById("up").onclick=()=>{nextDir={x:0,y:-1}};
-document.getElementById("down").onclick=()=>{nextDir={x:0,y:1}};
-document.getElementById("left").onclick=()=>{nextDir={x:-1,y:0}};
-document.getElementById("right").onclick=()=>{nextDir={x:1,y:0}};
+document.getElementById("up").onclick=()=>nextDir={x:0,y:-1};
+document.getElementById("down").onclick=()=>nextDir={x:0,y:1};
+document.getElementById("left").onclick=()=>nextDir={x:-1,y:0};
+document.getElementById("right").onclick=()=>nextDir={x:1,y:0};
 
 // スタート
 canvas.addEventListener("touchstart",()=>{
